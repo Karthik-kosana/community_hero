@@ -29,6 +29,7 @@ function renderActiveView() {
   UI.renderHeaderStats();
   switch (State.activeView) {
     case 'report':
+      ReportPinMap.invalidate();
       break;
     case 'map':
       UI.renderMapFilterChips(State.activeMapFilter);
@@ -83,6 +84,17 @@ function bindReportForm() {
     if (fileInput.files && fileInput.files[0]) handlePhoto(fileInput.files[0]);
   });
 
+  // Pin-drop map: citizen taps/drags to set the exact damage location
+  const coordsEl = document.getElementById('report-map-coords');
+  ReportPinMap.init((lat, lng) => {
+    State.pendingGeo = { lat, lng };
+    coordsEl.textContent = `Pin set at ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    coordsEl.classList.add('ok');
+    if (!locationInput.value) {
+      locationInput.value = `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+  });
+
   // "Use my location" affordance: try geolocation, else accept manual text
   locationInput.addEventListener('focus', () => {
     if (locationInput.value || !navigator.geolocation) return;
@@ -105,9 +117,12 @@ function bindReportForm() {
           if (!locationInput.value) locationInput.value = `Near ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
           locationStatus.textContent = '✓ Location detected and attached to this report.';
           locationStatus.classList.add('ok');
+          ReportPinMap.setPosition(latitude, longitude, 16);
+          coordsEl.textContent = `Pin set at ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+          coordsEl.classList.add('ok');
         },
         () => {
-          locationStatus.textContent = 'Could not get location — please type an address/landmark instead.';
+          locationStatus.textContent = 'Could not get location — please type an address/landmark instead, or drop the pin on the map.';
         },
         { enableHighAccuracy: true, timeout: 8000 }
       );
@@ -253,6 +268,10 @@ function resetReportForm() {
   State.pendingAI = null;
   State.pendingAnonymous = false;
   State.pendingGeo = null;
+  const coordsEl = document.getElementById('report-map-coords');
+  if (coordsEl) { coordsEl.textContent = ''; coordsEl.classList.remove('ok'); }
+  const center = State.userLocation || CITY_CENTER;
+  ReportPinMap.setPosition(center.lat, center.lng, 14);
   const anonCheck = document.getElementById('f-anonymous');
   if (anonCheck) anonCheck.checked = false;
   const catHint = document.getElementById('category-hint');
