@@ -38,14 +38,23 @@ const UI = {
   },
 
   // ---------- AI panel in report form ----------
-  renderAIPanelLoading() {
+  renderAIPanelStage(stage) {
     const panel = document.getElementById('ai-panel');
     panel.classList.add('show');
+    const stages = {
+      uploading: 'Uploading photo...',
+      analyzing: 'Running vision model...',
+      duplicates: 'Cross-referencing nearby reports...'
+    };
     panel.innerHTML = `
       <div class="ai-card">
-        <div class="ai-card-head"><span class="spin"></span> Analyzing photo...</div>
-        <div class="ai-row"><span>Running vision model</span></div>
+        <div class="ai-card-head"><span class="spin"></span> Analyzing photo</div>
+        <div class="ai-row"><span>${stages[stage] || 'Working...'}</span></div>
       </div>`;
+  },
+
+  renderAIPanelLoading() {
+    this.renderAIPanelStage('uploading');
   },
 
   renderAIPanelResult(ai) {
@@ -60,6 +69,7 @@ const UI = {
         <div class="ai-row"><span>Severity</span><span class="ai-badge ${ai.emergency ? 'critical' : sevClass}">${ai.emergency ? 'critical' : ai.severity}</span></div>
         <div class="ai-row"><span>Routed to</span><b>${ai.department}</b></div>
         ${ai.duplicate && ai.duplicate.isDuplicate ? `<div class="ai-row"><span>Possible duplicate of</span><b>"${ai.duplicate.matchTitle}"</b></div>` : ''}
+        ${ai.confidence < 0.6 ? `<div class="ai-row" style="color:var(--amber);"><span>Low confidence — please confirm category below</span></div>` : ''}
       </div>`;
     document.getElementById('emergency-banner-form').classList.toggle('show', !!ai.emergency);
   },
@@ -85,10 +95,11 @@ const UI = {
           <div class="feed-card-title">${this.esc(r.title)}</div>
           <span class="stamp ${this.stampClass(r.status)}">${STATUS_LABEL[r.status] || r.status}</span>
         </div>
-        <div style="font-size:12px; color:#4B5A70;">${this.esc(r.category)} · ${this.esc(r.location)}</div>
+        <div style="font-size:12px; color:#4B5A70;">${this.esc(r.category)} · ${this.esc(r.location)}${r.anonymous ? ' · <span style="color:var(--steel);">Anonymous</span>' : ''}</div>
         <div class="feed-card-meta">
           <span>${this.timeAgo(r.createdAt)}</span>
           <span>✓ ${r.confirmations || 0} confirms</span>
+          ${State.userLocation ? `<span>${haversineKm(State.userLocation, { lat: r.lat, lng: r.lng }).toFixed(1)} km away</span>` : ''}
           ${r.ai && r.ai.emergency ? '<span style="color:var(--red); font-weight:700;">🚨 EMERGENCY</span>' : ''}
         </div>
       </div>
@@ -100,11 +111,29 @@ const UI = {
 
   renderMapFilterChips(activeFilter) {
     document.querySelectorAll('#filter-chips .chip').forEach(chip => {
-      chip.classList.toggle('active', chip.dataset.filter === activeFilter);
+      if (chip.dataset.distance) {
+        chip.classList.toggle('active', Number(chip.dataset.distance) === State.distanceFilterKm);
+      } else {
+        chip.classList.toggle('active', chip.dataset.filter === activeFilter);
+      }
     });
   },
 
   // ---------- My Reports view ----------
+  renderMyStats() {
+    const wrap = document.getElementById('my-stats');
+    if (!wrap) return;
+    const s = State.myStats();
+    wrap.innerHTML = `
+      <div class="points-card">
+        <div class="points-num">${s.points}</div>
+        <div class="points-label">Civic points</div>
+      </div>
+      <div class="badges-row">
+        ${s.badges.length ? s.badges.map(b => `<span class="badge-pill" title="${this.esc(b.label)}">${b.icon} ${this.esc(b.label)}</span>`).join('') : '<span class="empty-queue">File reports and get them verified/resolved to earn badges.</span>'}
+      </div>`;
+  },
+
   renderMine(onCardClick) {
     const mine = State.myReports().slice().sort((a, b) => b.createdAt - a.createdAt);
     const el = document.getElementById('mine-list');
@@ -116,8 +145,8 @@ const UI = {
       <div class="mine-card" data-id="${r.id}">
         <img class="mine-thumb" src="${r.photo || this.placeholderImg()}" alt="">
         <div class="mine-body">
-          <div class="mine-title">${this.esc(r.title)}</div>
-          <div class="mine-sub">${this.esc(r.category)} · ${this.timeAgo(r.createdAt)}</div>
+          <div class="mine-title">${this.esc(r.title)}${r.anonymous ? ' <span style="font-size:10px; color:var(--steel); font-weight:600;">(anonymous)</span>' : ''}</div>
+          <div class="mine-sub">${this.esc(r.category)} · ${this.timeAgo(r.createdAt)}${State.estimateETA(r) ? ' · ETA: ' + State.estimateETA(r) : ''}</div>
         </div>
         <span class="stamp ${this.stampClass(r.status)}">${STATUS_LABEL[r.status] || r.status}</span>
       </div>
@@ -279,6 +308,65 @@ const UI = {
     `).join('');
   },
 
+  // ---------- Admin view ----------
+  renderAdmin(onAction) {
+    const deptList = document.getElementById('admin-dept-list');
+    if (deptList) {
+      deptList.innerHTML = State.adminDepartments.map(d => `
+        <div class="admin-row">
+          <span>${this.esc(d)}</span>
+          <button class="remove-btn" data-dept="${this.esc(d)}">✕</button>
+        </div>
+      `).join('') || '<div class="empty-queue">No departments yet.</div>';
+      deptList.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => onAction('remove-dept', btn.dataset.dept));
+      });
+    }
+
+    const userList = document.getElementById('admin-user-list');
+    if (userList) {
+      userList.innerHTML = State.adminUsers.map(u => `
+        <div class="admin-row">
+          <span>${this.esc(u.name)}</span>
+          <select data-user="${u.id}" class="role-select">
+            <option value="citizen" ${u.role === 'citizen' ? 'selected' : ''}>Citizen</option>
+            <option value="officer" ${u.role === 'officer' ? 'selected' : ''}>Officer</option>
+            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>
+          ${u.role === 'officer' ? `
+            <select data-user-dept="${u.id}" class="dept-select">
+              ${State.adminDepartments.map(d => `<option ${u.department === d ? 'selected' : ''}>${this.esc(d)}</option>`).join('')}
+            </select>` : ''}
+          <button class="remove-btn" data-user-remove="${u.id}">✕</button>
+        </div>
+      `).join('') || '<div class="empty-queue">No users yet.</div>';
+      userList.querySelectorAll('.role-select').forEach(sel => {
+        sel.addEventListener('change', () => onAction('change-role', { id: sel.dataset.user, role: sel.value }));
+      });
+      userList.querySelectorAll('.dept-select').forEach(sel => {
+        sel.addEventListener('change', () => onAction('change-dept', { id: sel.dataset.userDept, department: sel.value }));
+      });
+      userList.querySelectorAll('[data-user-remove]').forEach(btn => {
+        btn.addEventListener('click', () => onAction('remove-user', btn.dataset.userRemove));
+      });
+    }
+
+    const versionEl = document.getElementById('admin-ai-version');
+    if (versionEl) {
+      versionEl.textContent = 'civic-triage-v1.2 · keyword-heuristic engine (mock) · last updated locally';
+    }
+
+    const costEl = document.getElementById('admin-ai-cost');
+    if (costEl) {
+      const runs = State.reports.filter(r => r.ai).length;
+      const estCost = (runs * 0.0008).toFixed(4);
+      costEl.innerHTML = `
+        <div class="dept-row"><span class="dn">AI runs (mock)</span><span class="dv" style="width:auto;">${runs}</span></div>
+        <div class="dept-row"><span class="dn">Est. cost</span><span class="dv" style="width:auto;">$${estCost}</span></div>
+      `;
+    }
+  },
+
   // ---------- Modal ----------
   openModal(report, handlers) {
     const overlay = document.getElementById('modal-overlay');
@@ -287,7 +375,18 @@ const UI = {
     document.getElementById('modal-desc').textContent = report.description || 'No additional details provided.';
     document.getElementById('modal-cat').textContent = report.category;
     document.getElementById('modal-loc').textContent = report.location;
-    document.getElementById('modal-time').textContent = this.timeAgo(report.createdAt);
+    document.getElementById('modal-time').textContent = this.timeAgo(report.createdAt) + (report.anonymous ? ' · Anonymous' : '');
+
+    const etaItem = document.getElementById('modal-eta-item');
+    const eta = State.estimateETA(report);
+    if (etaItem) {
+      if (eta) {
+        etaItem.style.display = '';
+        document.getElementById('modal-eta').textContent = eta;
+      } else {
+        etaItem.style.display = 'none';
+      }
+    }
 
     const stamp = document.getElementById('modal-stamp');
     stamp.className = `stamp ${this.stampClass(report.status)}`;
