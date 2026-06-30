@@ -26,7 +26,6 @@
       <button class="nav-btn" data-view="map">Map &amp; Feed</button>
       <button class="nav-btn" data-view="mine">My Reports</button>
       <button class="nav-btn" data-view="dashboard">Officer Dashboard</button>
-      <button class="nav-btn" data-view="admin">Admin</button>
     </nav>
   </header>
 
@@ -228,46 +227,6 @@
           <div class="dept-card">
             <h3>Resolution rate (30d)</h3>
             <div id="dept-resolution"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== ADMIN VIEW ===== -->
-    <section class="view" id="view-admin">
-      <div class="section-head"><h2>Admin</h2></div>
-      <div class="dash-layout">
-        <div>
-          <div class="dept-card">
-            <h3>Departments</h3>
-            <div id="admin-dept-list"></div>
-            <div class="admin-add-row">
-              <input type="text" id="admin-new-dept" placeholder="New department name">
-              <button class="q-btn primary" id="admin-add-dept">Add</button>
-            </div>
-          </div>
-          <div class="dept-card">
-            <h3>Mock users &amp; roles</h3>
-            <div id="admin-user-list"></div>
-            <div class="admin-add-row">
-              <input type="text" id="admin-new-user" placeholder="Name (mock)">
-              <select id="admin-new-role">
-                <option value="citizen">Citizen</option>
-                <option value="officer">Officer</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button class="q-btn primary" id="admin-add-user">Add</button>
-            </div>
-          </div>
-        </div>
-        <div>
-          <div class="dept-card">
-            <h3>AI prompt version (mock)</h3>
-            <div id="admin-ai-version" style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--steel);"></div>
-          </div>
-          <div class="dept-card">
-            <h3>AI run cost estimate (mock)</h3>
-            <div id="admin-ai-cost"></div>
           </div>
         </div>
       </div>
