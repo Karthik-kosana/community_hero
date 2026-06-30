@@ -34,9 +34,14 @@ const State = {
   currentUser: { id: 'u-demo', name: 'You' },
   activeView: 'report',
   activeMapFilter: 'all',
+  activeCategoryFilter: 'all',
+  activeTimeFilter: 'all', // all | 24h | 7d | 30d
   activeDeptFilter: 'all',
   pendingPhoto: null,   // { dataUrl } currently staged in the report form
   pendingAI: null,      // AI analysis result for the staged photo
+  pendingAnonymous: false,
+  userLocation: null,    // { lat, lng } from navigator.geolocation, if granted
+  distanceFilterKm: null, // null = off, else max distance (km) from userLocation
 
   load() {
     let raw = null;
@@ -44,11 +49,34 @@ const State = {
     if (raw) {
       try {
         this.reports = JSON.parse(raw);
-        return;
-      } catch (e) { /* fall through to seed */ }
+      } catch (e) { this.reports = seedReports(); this.save(); }
+    } else {
+      this.reports = seedReports();
+      this.save();
     }
-    this.reports = seedReports();
-    this.save();
+    this.loadAdminData();
+  },
+
+  loadAdminData() {
+    try {
+      const d = localStorage.getItem('ch_admin_depts');
+      this.adminDepartments = d ? JSON.parse(d) : this.departments().slice();
+    } catch (e) { this.adminDepartments = this.departments().slice(); }
+    try {
+      const u = localStorage.getItem('ch_admin_users');
+      this.adminUsers = u ? JSON.parse(u) : [
+        { id: 'u-demo', name: 'You', role: 'citizen' },
+        { id: uid('user'), name: 'Officer Rao', role: 'officer', department: 'Public Works' },
+        { id: uid('user'), name: 'Admin Priya', role: 'admin' }
+      ];
+    } catch (e) { this.adminUsers = []; }
+  },
+
+  saveAdminData() {
+    try {
+      localStorage.setItem('ch_admin_depts', JSON.stringify(this.adminDepartments));
+      localStorage.setItem('ch_admin_users', JSON.stringify(this.adminUsers));
+    } catch (e) { /* storage unavailable */ }
   },
 
   save() {
@@ -127,6 +155,18 @@ const State = {
     return this.reports.filter(r => r.ai && r.ai.emergency && r.status !== 'resolved');
   },
 
+  // Rough client-side ETA estimate based on category + current status (brief §6.3)
+  estimateETA(report) {
+    if (report.status === 'resolved') return null;
+    const baseDays = { 'Pothole': 5, 'Water Leak': 2, 'Garbage Dumping': 1, 'Broken Streetlight': 3,
+      'Drainage Blockage': 4, 'Traffic Signal': 2, 'Park Maintenance': 6, 'Public Safety Hazard': 0.5 };
+    const stageMultiplier = { reported: 1, review: 0.8, verified: 0.6, progress: 0.3 };
+    const days = (baseDays[report.category] || 4) * (stageMultiplier[report.status] ?? 1);
+    if (days < 1) return 'Within a few hours';
+    if (days <= 1.5) return 'About 1 day';
+    return `About ${Math.round(days)} days`;
+  },
+
   moderationQueue() {
     return this.reports.filter(r => r.moderation && r.moderation.pending);
   },
@@ -137,9 +177,23 @@ const State = {
 
   filteredFeed() {
     const f = this.activeMapFilter;
-    if (f === 'all') return this.reports;
-    const map = { reported: 'reported', verified: 'verified', progress: 'progress', resolved: 'resolved' };
-    return this.reports.filter(r => r.status === map[f]);
+    let list = this.reports;
+    if (f !== 'all') {
+      const map = { reported: 'reported', verified: 'verified', progress: 'progress', resolved: 'resolved' };
+      list = list.filter(r => r.status === map[f]);
+    }
+    if (this.activeCategoryFilter !== 'all') {
+      list = list.filter(r => r.category === this.activeCategoryFilter);
+    }
+    if (this.activeTimeFilter !== 'all') {
+      const ranges = { '24h': 86400000, '7d': 7 * 86400000, '30d': 30 * 86400000 };
+      const cutoff = Date.now() - ranges[this.activeTimeFilter];
+      list = list.filter(r => r.createdAt >= cutoff);
+    }
+    if (this.distanceFilterKm != null && this.userLocation) {
+      list = list.filter(r => haversineKm(this.userLocation, { lat: r.lat, lng: r.lng }) <= this.distanceFilterKm);
+    }
+    return list;
   },
 
   departments() {
@@ -166,8 +220,38 @@ const State = {
 
   workOrders() {
     return this.reports.filter(r => r.status === 'progress' || r.status === 'verified');
+  },
+
+  // ---- gamification (client-side approximation of points/badges) ----
+  myStats() {
+    const mine = this.myReports();
+    const points = mine.reduce((sum, r) => {
+      if (r.status === 'resolved') return sum + 50;
+      if (r.status === 'verified' || r.status === 'progress') return sum + 20;
+      return sum + 5;
+    }, 0);
+    const resolvedCount = mine.filter(r => r.status === 'resolved').length;
+    const verifiedCount = mine.filter(r => ['verified', 'progress', 'resolved'].includes(r.status)).length;
+    const emergencyCount = mine.filter(r => r.ai && r.ai.emergency).length;
+    const badges = [];
+    if (mine.length >= 1) badges.push({ icon: '🌱', label: 'First Report' });
+    if (mine.length >= 5) badges.push({ icon: '📍', label: 'Regular Reporter' });
+    if (verifiedCount >= 3) badges.push({ icon: '✅', label: 'Trusted Eyes' });
+    if (resolvedCount >= 1) badges.push({ icon: '🏆', label: 'Issue Solved' });
+    if (resolvedCount >= 5) badges.push({ icon: '🎖️', label: 'Civic Champion' });
+    if (emergencyCount >= 1) badges.push({ icon: '🚨', label: 'Safety Spotter' });
+    return { points, resolvedCount, verifiedCount, totalCount: mine.length, badges };
   }
 };
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
 
 function uid(prefix) {
   return prefix + '-' + Math.random().toString(36).slice(2, 9);
