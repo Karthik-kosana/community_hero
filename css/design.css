@@ -84,6 +84,30 @@ h1{font-size:40px; line-height:1.08; margin:0 0 14px; font-weight:800; letter-sp
 .submit-btn:hover{background:var(--blue-dark);}
 .submit-btn:disabled{background:var(--steel-light); cursor:not-allowed;}
 
+.geo-btn{margin-top:6px; width:100%; background:#F0F5FF; border:1px solid #C9DAF6; color:var(--blue-dark); padding:8px; border-radius:6px; font-size:12px; font-weight:600;}
+.geo-btn:hover{background:#E4ECFB;}
+
+.anon-toggle{display:flex; align-items:flex-start; gap:8px; font-size:11.5px; color:var(--steel); margin:14px 0 4px; cursor:pointer; line-height:1.4;}
+.anon-toggle input{margin-top:2px; flex-shrink:0;}
+
+#f-category.needs-review{border-color:var(--amber); box-shadow:0 0 0 3px rgba(224,146,46,.12);}
+
+.my-stats{display:flex; align-items:center; gap:18px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin-bottom:18px; flex-wrap:wrap;}
+.points-card{text-align:center; flex-shrink:0;}
+.points-num{font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; color:var(--blue-dark);}
+.points-label{font-size:10.5px; color:var(--steel); text-transform:uppercase; letter-spacing:.03em;}
+.badges-row{display:flex; gap:8px; flex-wrap:wrap;}
+.badge-pill{background:#F0F5FF; border:1px solid #C9DAF6; color:var(--blue-dark); padding:5px 10px; border-radius:99px; font-size:11.5px; font-weight:600;}
+
+.select-filter{background:#fff; border:1px solid var(--line); padding:7px 11px; border-radius:99px; font-size:12.5px; font-weight:600; color:var(--steel);}
+
+.admin-add-row{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+.admin-add-row input, .admin-add-row select{flex:1; min-width:120px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;}
+.admin-row{display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); font-size:12.5px;}
+.admin-row:last-child{border-bottom:none;}
+.admin-row select{padding:4px 8px; border:1px solid var(--line); border-radius:5px; font-size:11.5px;}
+.admin-row .remove-btn{background:none; border:none; color:var(--red); font-size:13px; cursor:pointer; padding:2px 6px;}
+
 .section-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px;}
 .section-head h2{font-size:22px; margin:0; font-weight:800; letter-spacing:-0.3px;}
 .filters{display:flex; gap:7px; flex-wrap:wrap;}
