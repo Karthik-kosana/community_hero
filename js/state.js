@@ -54,29 +54,6 @@ const State = {
       this.reports = seedReports();
       this.save();
     }
-    this.loadAdminData();
-  },
-
-  loadAdminData() {
-    try {
-      const d = localStorage.getItem('ch_admin_depts');
-      this.adminDepartments = d ? JSON.parse(d) : this.departments().slice();
-    } catch (e) { this.adminDepartments = this.departments().slice(); }
-    try {
-      const u = localStorage.getItem('ch_admin_users');
-      this.adminUsers = u ? JSON.parse(u) : [
-        { id: 'u-demo', name: 'You', role: 'citizen' },
-        { id: uid('user'), name: 'Officer Rao', role: 'officer', department: 'Public Works' },
-        { id: uid('user'), name: 'Admin Priya', role: 'admin' }
-      ];
-    } catch (e) { this.adminUsers = []; }
-  },
-
-  saveAdminData() {
-    try {
-      localStorage.setItem('ch_admin_depts', JSON.stringify(this.adminDepartments));
-      localStorage.setItem('ch_admin_users', JSON.stringify(this.adminUsers));
-    } catch (e) { /* storage unavailable */ }
   },
 
   save() {
