@@ -7,10 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
   bindNav();
   bindReportForm();
   bindMapFilters();
+  bindCategoryTimeFilters();
   bindDeptFilters();
   bindLayerToggle();
   bindModal();
   bindResetLink();
+  bindAdmin();
 
   renderActiveView();
 });
@@ -35,16 +37,21 @@ function renderActiveView() {
       UI.renderFeed((id) => openReportModal(id));
       break;
     case 'mine':
+      UI.renderMyStats();
       UI.renderMine((id) => openReportModal(id));
       break;
     case 'dashboard':
       UI.renderDashStats();
       UI.renderDeptFilterChips();
+      checkNewEmergencies();
       UI.renderEmergencyQueue(handleEmergencyAction);
       UI.renderModerationQueue(handleModerationAction);
       UI.renderWorkOrders((id) => openReportModal(id));
       UI.renderDeptLoad();
       UI.renderDeptResolution();
+      break;
+    case 'admin':
+      UI.renderAdmin(handleAdminAction);
       break;
   }
 }
@@ -79,8 +86,46 @@ function bindReportForm() {
   // "Use my location" affordance: try geolocation, else accept manual text
   locationInput.addEventListener('focus', () => {
     if (locationInput.value || !navigator.geolocation) return;
-    locationStatus.textContent = 'Tip: type an address/landmark, or allow location access below.';
+    locationStatus.textContent = 'Tip: type an address/landmark, or tap "Use my location" below.';
   });
+
+  const geoBtn = document.getElementById('use-location-btn');
+  if (geoBtn) {
+    geoBtn.addEventListener('click', () => {
+      if (!navigator.geolocation) {
+        UI.toast('Geolocation is not available in this browser.');
+        return;
+      }
+      locationStatus.textContent = 'Detecting your location...';
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          State.userLocation = { lat: latitude, lng: longitude };
+          State.pendingGeo = { lat: latitude, lng: longitude };
+          if (!locationInput.value) locationInput.value = `Near ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          locationStatus.textContent = '✓ Location detected and attached to this report.';
+          locationStatus.classList.add('ok');
+        },
+        () => {
+          locationStatus.textContent = 'Could not get location — please type an address/landmark instead.';
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    });
+  }
+
+  const anonCheck = document.getElementById('f-anonymous');
+  if (anonCheck) {
+    anonCheck.addEventListener('change', () => { State.pendingAnonymous = anonCheck.checked; });
+  }
+
+  const catSelect = document.getElementById('f-category');
+  if (catSelect) {
+    catSelect.addEventListener('change', () => {
+      const hint = document.getElementById('category-hint');
+      if (hint) hint.textContent = '';
+    });
+  }
 
   document.getElementById('upload-zone').insertAdjacentHTML('afterend', '');
 
@@ -88,7 +133,7 @@ function bindReportForm() {
 
   // Try to silently offer geolocation as a convenience once on load
   if (navigator.geolocation && !locationInput.value) {
-    locationStatus.textContent = 'Location auto-detected when available, or enter manually.';
+    locationStatus.textContent = 'Tap "Use my location" or enter manually.';
   }
 }
 
@@ -109,16 +154,29 @@ function handlePhoto(file) {
 }
 
 function runAIAnalysis() {
-  UI.renderAIPanelLoading();
+  UI.renderAIPanelStage('uploading');
   const title = document.getElementById('f-title').value;
   const desc = document.getElementById('f-desc').value;
+
+  setTimeout(() => UI.renderAIPanelStage('analyzing'), 500);
+  setTimeout(() => UI.renderAIPanelStage('duplicates'), 1100);
+
   AI.analyze({ title, description: desc, filename: 'photo', existingReports: State.reports })
     .then(result => {
       State.pendingAI = result;
       UI.renderAIPanelResult(result);
-      // Auto-fill category select if user hasn't chosen one
       const catSelect = document.getElementById('f-category');
-      if (!catSelect.value) catSelect.value = result.category;
+      const hint = document.getElementById('category-hint');
+      if (result.confidence < 0.6) {
+        // Low confidence: don't silently auto-fill — ask the citizen to confirm/edit
+        if (hint) hint.textContent = `AI wasn't fully sure (${Math.round(result.confidence * 100)}%) — please confirm or pick the right category.`;
+        if (!catSelect.value) catSelect.value = result.category;
+        catSelect.classList.add('needs-review');
+      } else {
+        if (hint) hint.textContent = '';
+        catSelect.classList.remove('needs-review');
+        if (!catSelect.value) catSelect.value = result.category;
+      }
     });
 }
 
@@ -141,8 +199,8 @@ function submitReport() {
 
   const finalize = (ai) => {
     const category = catSelect.value || (ai && ai.category) || CATEGORIES[0];
-    const lat = jitterCoord(CITY_CENTER.lat, 0.03);
-    const lng = jitterCoord(CITY_CENTER.lng, 0.03);
+    const lat = State.pendingGeo ? State.pendingGeo.lat : jitterCoord(CITY_CENTER.lat, 0.03);
+    const lng = State.pendingGeo ? State.pendingGeo.lng : jitterCoord(CITY_CENTER.lng, 0.03);
     const report = {
       id: uid('rep'),
       userId: State.currentUser.id,
@@ -152,6 +210,7 @@ function submitReport() {
       location,
       lat, lng,
       photo: State.pendingPhoto,
+      anonymous: !!State.pendingAnonymous,
       status: ai && ai.emergency ? 'verified' : 'reported',
       confirmations: 0,
       comments: [],
@@ -192,6 +251,12 @@ function resetReportForm() {
   UI.clearAIPanel();
   State.pendingPhoto = null;
   State.pendingAI = null;
+  State.pendingAnonymous = false;
+  State.pendingGeo = null;
+  const anonCheck = document.getElementById('f-anonymous');
+  if (anonCheck) anonCheck.checked = false;
+  const catHint = document.getElementById('category-hint');
+  if (catHint) catHint.textContent = '';
 }
 
 /* ---------------- Map & feed filters ---------------- */
@@ -200,11 +265,43 @@ function bindMapFilters() {
   document.getElementById('filter-chips').addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
+    if (chip.dataset.distance) {
+      handleDistanceFilterClick(chip);
+      return;
+    }
     State.activeMapFilter = chip.dataset.filter;
     UI.renderMapFilterChips(State.activeMapFilter);
     MapModule.render(State.filteredFeed(), (id) => openReportModal(id));
     UI.renderFeed((id) => openReportModal(id));
   });
+}
+
+function handleDistanceFilterClick(chip) {
+  const km = Number(chip.dataset.distance);
+  if (State.distanceFilterKm === km) {
+    State.distanceFilterKm = null;
+    UI.renderMapFilterChips(State.activeMapFilter);
+    MapModule.render(State.filteredFeed(), (id) => openReportModal(id));
+    UI.renderFeed((id) => openReportModal(id));
+    return;
+  }
+  if (!navigator.geolocation) {
+    UI.toast('Geolocation is not available in this browser.');
+    return;
+  }
+  UI.toast('Finding reports near you...');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      State.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      State.distanceFilterKm = km;
+      UI.renderMapFilterChips(State.activeMapFilter);
+      MapModule.render(State.filteredFeed(), (id) => openReportModal(id));
+      MapModule.invalidate();
+      UI.renderFeed((id) => openReportModal(id));
+    },
+    () => UI.toast('Could not get your location.'),
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
 }
 
 function bindLayerToggle() {
@@ -216,7 +313,52 @@ function bindLayerToggle() {
   });
 }
 
-/* ---------------- Dashboard ---------------- */
+function bindCategoryTimeFilters() {
+  const catSel = document.getElementById('category-filter');
+  const timeSel = document.getElementById('time-filter');
+  if (catSel) {
+    catSel.addEventListener('change', () => {
+      State.activeCategoryFilter = catSel.value;
+      MapModule.render(State.filteredFeed(), (id) => openReportModal(id));
+      UI.renderFeed((id) => openReportModal(id));
+    });
+  }
+  if (timeSel) {
+    timeSel.addEventListener('change', () => {
+      State.activeTimeFilter = timeSel.value;
+      MapModule.render(State.filteredFeed(), (id) => openReportModal(id));
+      UI.renderFeed((id) => openReportModal(id));
+    });
+  }
+}
+
+/* ---------------- Emergency audible alert (brief §6.4) ---------------- */
+
+let seenEmergencyIds = new Set(JSON.parse(localStorage.getItem('ch_seen_emergencies') || '[]'));
+
+function checkNewEmergencies() {
+  const q = State.emergencyQueue();
+  const newOnes = q.filter(r => !seenEmergencyIds.has(r.id));
+  if (newOnes.length) {
+    playEmergencyAlert();
+    newOnes.forEach(r => seenEmergencyIds.add(r.id));
+    localStorage.setItem('ch_seen_emergencies', JSON.stringify([...seenEmergencyIds]));
+  }
+}
+
+function playEmergencyAlert() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.08;
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    setTimeout(() => { osc.stop(); ctx.close(); }, 350);
+  } catch (e) { /* audio unavailable — silently ignore */ }
+}
 
 function bindDeptFilters() {
   document.getElementById('dept-filter-chips').addEventListener('click', (e) => {
@@ -277,6 +419,63 @@ function openReportModal(id) {
       }
     }
   });
+}
+
+/* ---------------- Admin ---------------- */
+
+function bindAdmin() {
+  const addDeptBtn = document.getElementById('admin-add-dept');
+  if (addDeptBtn) {
+    addDeptBtn.addEventListener('click', () => {
+      const input = document.getElementById('admin-new-dept');
+      const name = input.value.trim();
+      if (!name) return;
+      if (State.adminDepartments.includes(name)) { UI.toast('Department already exists.'); return; }
+      State.adminDepartments.push(name);
+      State.saveAdminData();
+      input.value = '';
+      UI.renderAdmin(handleAdminAction);
+      UI.toast(`Department "${name}" added.`);
+    });
+  }
+  const addUserBtn = document.getElementById('admin-add-user');
+  if (addUserBtn) {
+    addUserBtn.addEventListener('click', () => {
+      const nameInput = document.getElementById('admin-new-user');
+      const roleSelect = document.getElementById('admin-new-role');
+      const name = nameInput.value.trim();
+      if (!name) return;
+      State.adminUsers.push({ id: uid('user'), name, role: roleSelect.value });
+      State.saveAdminData();
+      nameInput.value = '';
+      UI.renderAdmin(handleAdminAction);
+      UI.toast(`${name} added as ${roleSelect.value}.`);
+    });
+  }
+}
+
+function handleAdminAction(action, payload) {
+  if (action === 'remove-dept') {
+    State.adminDepartments = State.adminDepartments.filter(d => d !== payload);
+    State.saveAdminData();
+    UI.renderAdmin(handleAdminAction);
+  } else if (action === 'remove-user') {
+    State.adminUsers = State.adminUsers.filter(u => u.id !== payload);
+    State.saveAdminData();
+    UI.renderAdmin(handleAdminAction);
+  } else if (action === 'change-role') {
+    const { id, role } = payload;
+    const u = State.adminUsers.find(x => x.id === id);
+    if (u) u.role = role;
+    State.saveAdminData();
+    UI.toast('Role updated.');
+  } else if (action === 'change-dept') {
+    const { id, department } = payload;
+    const u = State.adminUsers.find(x => x.id === id);
+    if (u) u.department = department;
+    State.saveAdminData();
+    UI.toast('Department assignment updated.');
+  }
 }
 
 /* ---------------- Reset ---------------- */
