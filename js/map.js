@@ -85,3 +85,63 @@ const MapModule = {
     if (this.map) setTimeout(() => this.map.invalidateSize(), 150);
   }
 };
+
+/* ============================================================
+   ReportPinMap — small draggable-pin map used on the Report form
+   so citizens can set the exact damage location visually.
+   ============================================================ */
+
+const ReportPinMap = {
+  map: null,
+  marker: null,
+  onChange: null, // callback(lat, lng)
+
+  init(onChange) {
+    this.onChange = onChange;
+    if (this.map) { this.invalidate(); return; }
+
+    const center = State.userLocation || CITY_CENTER;
+    this.map = L.map('report-map', { zoomControl: true, attributionControl: true })
+      .setView([center.lat, center.lng], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(this.map);
+
+    const icon = L.divIcon({
+      className: 'ch-marker',
+      html: `<div style="
+          width:18px;height:18px;border-radius:50% 50% 50% 0;
+          background:#2E6BE0;border:2px solid #fff;
+          box-shadow:0 1px 4px rgba(0,0,0,.4);
+          transform:rotate(-45deg);
+        "></div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 18]
+    });
+
+    this.marker = L.marker([center.lat, center.lng], { icon, draggable: true }).addTo(this.map);
+    this.marker.on('dragend', () => {
+      const pos = this.marker.getLatLng();
+      this.onChange && this.onChange(pos.lat, pos.lng);
+    });
+
+    this.map.on('click', (e) => {
+      this.marker.setLatLng(e.latlng);
+      this.onChange && this.onChange(e.latlng.lat, e.latlng.lng);
+    });
+
+    setTimeout(() => this.map.invalidateSize(), 200);
+  },
+
+  setPosition(lat, lng, zoom) {
+    if (!this.map) return;
+    this.marker.setLatLng([lat, lng]);
+    this.map.setView([lat, lng], zoom || this.map.getZoom());
+  },
+
+  invalidate() {
+    if (this.map) setTimeout(() => this.map.invalidateSize(), 150);
+  }
+};
