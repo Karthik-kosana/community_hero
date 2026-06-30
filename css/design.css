@@ -190,7 +190,7 @@ h1{font-size:40px; line-height:1.08; margin:0 0 14px; font-weight:800; letter-sp
 .mod-row{background:var(--card); border:1px solid var(--amber); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:12px; margin-bottom:8px;}
 .mod-reason{font-size:11px; color:var(--red); margin-top:3px;}
 
-.modal-overlay{display:none; position:fixed; inset:0; background:rgba(15,27,45,.55); align-items:center; justify-content:center; z-index:200; padding:20px;}
+.modal-overlay{display:none; position:fixed; inset:0; background:rgba(15,27,45,.55); align-items:center; justify-content:center; z-index:2000; padding:20px;}
 .modal-overlay.show{display:flex; animation:fadeIn .15s ease;}
 .modal{background:#fff; border-radius:12px; max-width:520px; width:100%; max-height:88vh; overflow-y:auto; position:relative;}
 .modal-close{position:absolute; top:12px; right:12px; background:rgba(15,27,45,.55); color:#fff; border:none; width:30px; height:30px; border-radius:50%; font-size:14px; z-index:5;}
@@ -205,7 +205,7 @@ h1{font-size:40px; line-height:1.08; margin:0 0 14px; font-weight:800; letter-sp
 .vote-btn{flex:1; border:1px solid var(--line); background:#fff; padding:10px; border-radius:7px; font-size:12.5px; font-weight:600;}
 .vote-btn:hover{border-color:var(--blue); color:var(--blue);}
 
-.toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--navy); color:#fff; padding:12px 20px; border-radius:8px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:300;}
+.toast{position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--navy); color:#fff; padding:12px 20px; border-radius:8px; font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:3000;}
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
 footer{text-align:center; padding:18px; font-size:10.5px; color:var(--steel); font-family:'JetBrains Mono',monospace; letter-spacing:.03em; border-top:1px solid var(--line);}
