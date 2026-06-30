@@ -308,65 +308,6 @@ const UI = {
     `).join('');
   },
 
-  // ---------- Admin view ----------
-  renderAdmin(onAction) {
-    const deptList = document.getElementById('admin-dept-list');
-    if (deptList) {
-      deptList.innerHTML = State.adminDepartments.map(d => `
-        <div class="admin-row">
-          <span>${this.esc(d)}</span>
-          <button class="remove-btn" data-dept="${this.esc(d)}">✕</button>
-        </div>
-      `).join('') || '<div class="empty-queue">No departments yet.</div>';
-      deptList.querySelectorAll('.remove-btn').forEach(btn => {
-        btn.addEventListener('click', () => onAction('remove-dept', btn.dataset.dept));
-      });
-    }
-
-    const userList = document.getElementById('admin-user-list');
-    if (userList) {
-      userList.innerHTML = State.adminUsers.map(u => `
-        <div class="admin-row">
-          <span>${this.esc(u.name)}</span>
-          <select data-user="${u.id}" class="role-select">
-            <option value="citizen" ${u.role === 'citizen' ? 'selected' : ''}>Citizen</option>
-            <option value="officer" ${u.role === 'officer' ? 'selected' : ''}>Officer</option>
-            <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
-          </select>
-          ${u.role === 'officer' ? `
-            <select data-user-dept="${u.id}" class="dept-select">
-              ${State.adminDepartments.map(d => `<option ${u.department === d ? 'selected' : ''}>${this.esc(d)}</option>`).join('')}
-            </select>` : ''}
-          <button class="remove-btn" data-user-remove="${u.id}">✕</button>
-        </div>
-      `).join('') || '<div class="empty-queue">No users yet.</div>';
-      userList.querySelectorAll('.role-select').forEach(sel => {
-        sel.addEventListener('change', () => onAction('change-role', { id: sel.dataset.user, role: sel.value }));
-      });
-      userList.querySelectorAll('.dept-select').forEach(sel => {
-        sel.addEventListener('change', () => onAction('change-dept', { id: sel.dataset.userDept, department: sel.value }));
-      });
-      userList.querySelectorAll('[data-user-remove]').forEach(btn => {
-        btn.addEventListener('click', () => onAction('remove-user', btn.dataset.userRemove));
-      });
-    }
-
-    const versionEl = document.getElementById('admin-ai-version');
-    if (versionEl) {
-      versionEl.textContent = 'civic-triage-v1.2 · keyword-heuristic engine (mock) · last updated locally';
-    }
-
-    const costEl = document.getElementById('admin-ai-cost');
-    if (costEl) {
-      const runs = State.reports.filter(r => r.ai).length;
-      const estCost = (runs * 0.0008).toFixed(4);
-      costEl.innerHTML = `
-        <div class="dept-row"><span class="dn">AI runs (mock)</span><span class="dv" style="width:auto;">${runs}</span></div>
-        <div class="dept-row"><span class="dn">Est. cost</span><span class="dv" style="width:auto;">$${estCost}</span></div>
-      `;
-    }
-  },
-
   // ---------- Modal ----------
   openModal(report, handlers) {
     const overlay = document.getElementById('modal-overlay');
