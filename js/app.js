@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindLayerToggle();
   bindModal();
   bindResetLink();
-  bindAdmin();
 
   renderActiveView();
 });
@@ -50,9 +49,6 @@ function renderActiveView() {
       UI.renderWorkOrders((id) => openReportModal(id));
       UI.renderDeptLoad();
       UI.renderDeptResolution();
-      break;
-    case 'admin':
-      UI.renderAdmin(handleAdminAction);
       break;
   }
 }
@@ -438,63 +434,6 @@ function openReportModal(id) {
       }
     }
   });
-}
-
-/* ---------------- Admin ---------------- */
-
-function bindAdmin() {
-  const addDeptBtn = document.getElementById('admin-add-dept');
-  if (addDeptBtn) {
-    addDeptBtn.addEventListener('click', () => {
-      const input = document.getElementById('admin-new-dept');
-      const name = input.value.trim();
-      if (!name) return;
-      if (State.adminDepartments.includes(name)) { UI.toast('Department already exists.'); return; }
-      State.adminDepartments.push(name);
-      State.saveAdminData();
-      input.value = '';
-      UI.renderAdmin(handleAdminAction);
-      UI.toast(`Department "${name}" added.`);
-    });
-  }
-  const addUserBtn = document.getElementById('admin-add-user');
-  if (addUserBtn) {
-    addUserBtn.addEventListener('click', () => {
-      const nameInput = document.getElementById('admin-new-user');
-      const roleSelect = document.getElementById('admin-new-role');
-      const name = nameInput.value.trim();
-      if (!name) return;
-      State.adminUsers.push({ id: uid('user'), name, role: roleSelect.value });
-      State.saveAdminData();
-      nameInput.value = '';
-      UI.renderAdmin(handleAdminAction);
-      UI.toast(`${name} added as ${roleSelect.value}.`);
-    });
-  }
-}
-
-function handleAdminAction(action, payload) {
-  if (action === 'remove-dept') {
-    State.adminDepartments = State.adminDepartments.filter(d => d !== payload);
-    State.saveAdminData();
-    UI.renderAdmin(handleAdminAction);
-  } else if (action === 'remove-user') {
-    State.adminUsers = State.adminUsers.filter(u => u.id !== payload);
-    State.saveAdminData();
-    UI.renderAdmin(handleAdminAction);
-  } else if (action === 'change-role') {
-    const { id, role } = payload;
-    const u = State.adminUsers.find(x => x.id === id);
-    if (u) u.role = role;
-    State.saveAdminData();
-    UI.toast('Role updated.');
-  } else if (action === 'change-dept') {
-    const { id, department } = payload;
-    const u = State.adminUsers.find(x => x.id === id);
-    if (u) u.department = department;
-    State.saveAdminData();
-    UI.toast('Department assignment updated.');
-  }
 }
 
 /* ---------------- Reset ---------------- */
